@@ -4,9 +4,12 @@ import type { EnrichResult, Lead, PlaceLead, SavedSearch } from "@/lib/types";
 import { buildLead, isQualified } from "@/lib/scoring";
 import { downloadCsv, leadsToCsv } from "@/lib/csv";
 import { LeadRow } from "@/components/LeadRow";
+import { OutreachPanel, type OutreachTab } from "@/components/OutreachPanel";
+import type { EmailDraft, Seller } from "@/lib/outreach";
 
 const SAVED_KEY = "leadsfinder:saved";
 const CODE_KEY = "leadsfinder:code";
+const SELLER_KEY = "leadsfinder:seller";
 const CONCURRENCY = 4;
 
 type Sort = "score" | "reviews" | "name";
@@ -35,9 +38,14 @@ export default function Home() {
   const [saved, setSaved] = useState<SavedSearch[]>([]);
   const runId = useRef(0);
 
+  const [seller, setSeller] = useState<Seller>({ name: "", business: "" });
+  const [open, setOpen] = useState<{ id: string; tab: OutreachTab } | null>(null);
+  const [edits, setEdits] = useState<Record<string, EmailDraft>>({});
+
   // ---- bootstrap
   useEffect(() => {
     setCode(sessionStorage.getItem(CODE_KEY) ?? "");
+    try { const s = JSON.parse(localStorage.getItem(SELLER_KEY) ?? "null"); if (s) setSeller({ name: String(s.name ?? ""), business: String(s.business ?? "") }); } catch { /* ignore */ }
     try { setSaved(JSON.parse(localStorage.getItem(SAVED_KEY) ?? "[]")); } catch { /* ignore corrupt storage */ }
     fetch("/api/config").then((r) => r.json()).then(setConfig).catch(() => setConfig({ needsCode: false, demo: false }));
   }, []);
@@ -104,6 +112,16 @@ export default function Home() {
     }
   }
 
+  function updateSeller(s: Seller) {
+    setSeller(s);
+    try { localStorage.setItem(SELLER_KEY, JSON.stringify(s)); } catch { /* storage full or blocked */ }
+  }
+  function setEdit(key: string, d: EmailDraft | null) {
+    setEdits((cur) => { const next = { ...cur }; if (d) next[key] = d; else delete next[key]; return next; });
+  }
+  const openLead = open ? leads.find((l) => l.id === open.id) : undefined;
+  const closePanel = useCallback(() => setOpen(null), []);
+
   // ---- derived list
   const enriching = progress !== null;
   const hasResults = leads.length > 0;
@@ -136,7 +154,7 @@ export default function Home() {
   }
   function exportCsv() {
     const slug = `${searched?.query ?? "leads"}-${searched?.location ?? ""}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    downloadCsv(`leadsfinder-${slug}.csv`, leadsToCsv(visible));
+    downloadCsv(`leadsfinder-${slug}.csv`, leadsToCsv(visible, seller, searched?.query));
   }
 
   // ---- access gate
@@ -253,7 +271,7 @@ export default function Home() {
           </div>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-mist bg-paper">
-            {visible.length ? visible.map((l) => <LeadRow key={l.id} lead={l} />) : (
+            {visible.length ? visible.map((l) => <LeadRow key={l.id} lead={l} onCall={(x) => setOpen({ id: x.id, tab: "call" })} onEmail={(x) => setOpen({ id: x.id, tab: "email" })} />) : (
               <div className="px-4 py-10 text-center text-pine"><p>No leads match these filters.</p>{qualifiedOnly && <button className="btn btn-quiet mt-3" onClick={() => setQualifiedOnly(false)}>Show all {leads.length} businesses</button>}</div>
             )}
           </div>
@@ -263,6 +281,10 @@ export default function Home() {
             <p className="mt-2">Out of 100: 30 for reachability (email, phone, website), 30 for review opportunity, 30 for website opportunity, and 10 for how established the business is. Higher means an easier, more valuable pitch. Qualified means 45 or more with a phone number or email. Open Details on any lead for its breakdown.</p>
           </details>
         </section>
+      )}
+      {openLead && open && (
+        <OutreachPanel key={openLead.id} lead={openLead} tab={open.tab} onTab={(t) => setOpen({ id: openLead.id, tab: t })}
+          seller={seller} onSeller={updateSeller} hint={searched?.query} edits={edits} onEdit={setEdit} onClose={closePanel} />
       )}
     </div>
   );

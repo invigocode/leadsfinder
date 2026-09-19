@@ -10,7 +10,10 @@ Built with Next.js 15 (App Router), TypeScript and Tailwind. The backend is Next
 2. **Pull details** - name, address, phone, website, rating, review count, Maps link.
 3. **Look inside each website** - finds email addresses (homepage, then the contact page) and audits the site: HTTPS, mobile-friendly, stale copyright year, template builders (Wix, Weebly, ...), contact form, social links.
 4. **Score out of 100** - see below.
-5. **Work the list** - filter (hot / warm / cold, has email, no website), sort, save lists in the browser, export to CSV.
+5. **Work the list** - shows qualified leads first (score 45+ with a phone or email), filter by has email / no website, sort, save lists in the browser, export to CSV.
+6. **Reach out** - each lead has a **Call** button (a call script) and an **Email** button (an editable draft):
+   - *Call script*: opening, hook, pitch, question, close, voicemail and objection handling. It changes with the **business type** (dentist, plumber, restaurant, salon, ...: vocabulary, best time to call, how to get past the gatekeeper) and the **service you're pitching** (website creation/rebuild/refresh, mobile fix, review recovery/growth, social presence).
+   - *Email*: a personalised draft you can edit freely, open in your email app, or copy. Edits are kept per lead and service. The CSV export also includes a suggested subject and body per lead for mail-merge.
 
 ### Lead score
 
@@ -59,7 +62,8 @@ With no `GOOGLE_PLACES_API_KEY` the app runs in **demo mode** with sample data, 
 src/app/page.tsx            search + results UI
 src/app/api/search          Google Places search
 src/app/api/enrich          email + website audit for one business
-src/lib/scoring.ts          the 0-100 lead score
+src/lib/scoring.ts          the 0-100 lead score + qualification rule
+src/lib/outreach.ts         call scripts and email drafts (business type x service templates)
 src/lib/enrich.ts           email extraction and site audit
 src/lib/safe-fetch.ts       blocks private/internal addresses (SSRF protection)
 src/lib/guard.ts            access code + rate limiting

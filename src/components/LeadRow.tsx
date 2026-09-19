@@ -11,7 +11,7 @@ function host(url: string) {
 const BAR: Record<string, string> = { hot: "bg-hot", warm: "bg-warm", cold: "bg-cold" };
 const SLOT = "min-w-[6.75rem]";
 
-export function LeadRow({ lead }: { lead: Lead }) {
+export function LeadRow({ lead, onCall, onEmail }: { lead: Lead; onCall: (l: Lead) => void; onEmail: (l: Lead) => void }) {
   const [open, setOpen] = useState(false);
   const { score } = lead;
 
@@ -27,13 +27,13 @@ export function LeadRow({ lead }: { lead: Lead }) {
 
         <div className="flex w-full items-center gap-2 md:w-auto">
           {lead.phone ? (
-            <a className={`btn btn-primary ${SLOT}`} href={`tel:${lead.phone.replace(/\s/g, "")}`} aria-label={`Call ${lead.name}`}>Call</a>
+            <button type="button" className={`btn btn-primary ${SLOT}`} onClick={() => onCall(lead)} aria-label={`Call script for ${lead.name}`}>Call</button>
           ) : (
             <span className={`btn btn-quiet ${SLOT} opacity-45`} aria-disabled="true">No phone</span>
           )}
 
           {lead.emails.length ? (
-            <a className={`btn btn-quiet ${SLOT}`} href={`mailto:${lead.emails[0]}`} aria-label={`Email ${lead.name}`}>Email</a>
+            <button type="button" className={`btn btn-quiet ${SLOT}`} onClick={() => onEmail(lead)} aria-label={`Write email to ${lead.name}`}>Email</button>
           ) : (
             <span className={`btn btn-quiet ${SLOT} opacity-45`} aria-disabled="true">
               {lead.enrich === "pending" ? "Finding email" : "No email"}
