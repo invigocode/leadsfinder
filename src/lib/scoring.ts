@@ -109,3 +109,32 @@ export function buildLead(p: PlaceLead, extra?: Partial<Pick<Lead, "emails" | "a
   const score = scoreLead({ ...p, emails, audit, enriched: enrich === "done" || enrich === "failed" });
   return { ...p, emails, audit, enrich, score };
 }
+
+/** A lead worth contacting: a decent score AND a way to reach them. */
+export const QUALIFY_MIN_SCORE = 45;
+export function isQualified(l: Lead): boolean {
+  return l.score.total >= QUALIFY_MIN_SCORE && (l.emails.length > 0 || Boolean(l.phone));
+}
+
+/** One short sentence on why this business is a good prospect, e.g. "No website and only 12 reviews". */
+export function whyLead(l: Lead): string {
+  const year = new Date().getFullYear();
+  const reasons: string[] = [];
+
+  if (!l.website) reasons.push("No website");
+  else if (l.enrich === "done" && l.audit) {
+    if (!l.audit.reachable) reasons.push("Website won't load");
+    else if (!l.audit.mobileReady) reasons.push("Site isn't mobile-friendly");
+    else if (!l.audit.https) reasons.push("Site isn't secure");
+    else if (l.audit.lastYear && l.audit.lastYear <= year - 2) reasons.push("Site looks out of date");
+  }
+
+  if (l.reviewCount === 0) reasons.push("no reviews yet");
+  else if (l.rating != null && l.rating < 4.2 && l.reviewCount >= 5) reasons.push(`rated ${l.rating.toFixed(1)}`);
+  else if (l.reviewCount < 30) reasons.push(`only ${l.reviewCount} review${l.reviewCount === 1 ? "" : "s"}`);
+
+  if (!reasons.length) return "Strong online presence already";
+  const [first, second] = reasons;
+  const text = second ? `${first} and ${second}` : first;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

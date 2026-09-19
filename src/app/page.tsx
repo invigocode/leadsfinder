@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EnrichResult, Lead, PlaceLead, SavedSearch, Tier } from "@/lib/types";
-import { buildLead } from "@/lib/scoring";
+import type { EnrichResult, Lead, PlaceLead, SavedSearch } from "@/lib/types";
+import { buildLead, isQualified } from "@/lib/scoring";
 import { downloadCsv, leadsToCsv } from "@/lib/csv";
 import { LeadRow } from "@/components/LeadRow";
 
@@ -28,7 +28,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const [tier, setTier] = useState<Tier | "all">("all");
+  const [qualifiedOnly, setQualifiedOnly] = useState(true);
   const [needEmail, setNeedEmail] = useState(false);
   const [noSite, setNoSite] = useState(false);
   const [sort, setSort] = useState<Sort>("score");
@@ -88,7 +88,7 @@ export default function Home() {
     if (!query.trim() || !location.trim() || loading) return;
     const id = ++runId.current;
     setLoading(true); setError(""); setProgress(null); setLeads([]);
-    setTier("all"); setNeedEmail(false); setNoSite(false); setSort("score");
+    setQualifiedOnly(true); setNeedEmail(false); setNoSite(false); setSort("score");
     try {
       const data = await api<{ leads: PlaceLead[]; demo: boolean }>("/api/search", { query, location, max });
       if (runId.current !== id) return;
@@ -107,21 +107,17 @@ export default function Home() {
   // ---- derived list
   const enriching = progress !== null;
   const hasResults = leads.length > 0;
-  const counts = useMemo(() => ({
-    hot: leads.filter((l) => l.score.tier === "hot").length,
-    warm: leads.filter((l) => l.score.tier === "warm").length,
-    cold: leads.filter((l) => l.score.tier === "cold").length,
-  }), [leads]);
+  const qualifiedCount = useMemo(() => leads.filter(isQualified).length, [leads]);
 
   const visible = useMemo(() => {
     let out = leads.filter((l) =>
-      (tier === "all" || l.score.tier === tier) && (!needEmail || l.emails.length > 0) && (!noSite || !l.website));
+      (!qualifiedOnly || isQualified(l)) && (!needEmail || l.emails.length > 0) && (!noSite || !l.website));
     // Keep Google's order while checks run so rows don't jump around; sort once they finish.
     if (sort === "score" && !enriching) out = [...out].sort((a, b) => b.score.total - a.score.total);
     if (sort === "reviews") out = [...out].sort((a, b) => a.reviewCount - b.reviewCount);
     if (sort === "name") out = [...out].sort((a, b) => a.name.localeCompare(b.name));
     return out;
-  }, [leads, tier, needEmail, noSite, sort, enriching]);
+  }, [leads, qualifiedOnly, needEmail, noSite, sort, enriching]);
 
   // ---- saved lists
   function persist(next: SavedSearch[]) {
@@ -225,7 +221,7 @@ export default function Home() {
               <h2 className="font-display text-2xl font-semibold">
                 {leads.length} {searched.query} near {searched.location}
               </h2>
-              <p className="mt-1 text-sm text-pine">{counts.hot} hot, {counts.warm} warm, {counts.cold} cold</p>
+              <p className="mt-1 text-sm text-pine">{qualifiedCount} qualified: good score and a way to contact them</p>
             </div>
             <div className="flex gap-2">
               <button className="btn btn-quiet" onClick={saveCurrent}>Save list</button>
@@ -243,12 +239,7 @@ export default function Home() {
           )}
 
           <div className="mt-5 flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
-            {(["all", "hot", "warm", "cold"] as const).map((t) => (
-              <button key={t} className="chip capitalize" aria-pressed={tier === t} onClick={() => setTier(t)}>
-                {t === "all" ? "All" : t}
-              </button>
-            ))}
-            <span className="mx-1 h-5 w-px bg-ink/20" aria-hidden />
+            <button className="chip" aria-pressed={qualifiedOnly} onClick={() => setQualifiedOnly((v) => !v)}>Qualified only</button>
             <button className="chip" aria-pressed={needEmail} onClick={() => setNeedEmail((v) => !v)}>Has email</button>
             <button className="chip" aria-pressed={noSite} onClick={() => setNoSite((v) => !v)}>No website</button>
             <label className="ml-auto flex items-center gap-2 text-sm">
@@ -263,13 +254,14 @@ export default function Home() {
 
           <div className="mt-4 overflow-hidden rounded-xl border border-mist bg-paper">
             {visible.length ? visible.map((l) => <LeadRow key={l.id} lead={l} />) : (
-              <p className="px-4 py-10 text-center text-pine">No leads match these filters. Turn one off to see more.</p>
+              <div className="px-4 py-10 text-center text-pine"><p>No leads match these filters.</p>{qualifiedOnly && <button className="btn btn-quiet mt-3" onClick={() => setQualifiedOnly(false)}>Show all {leads.length} businesses</button>}</div>
             )}
           </div>
 
-          <p className="mt-6 max-w-2xl text-sm text-pine">
-            Lead score out of 100: 30 for reachability (email, phone, website), 30 for review opportunity, 30 for website opportunity, and 10 for how established the business is. A higher score means an easier, more valuable pitch. Select a score to see the breakdown.
-          </p>
+          <details className="mt-6 max-w-2xl text-sm text-pine">
+            <summary className="cursor-pointer font-medium text-ink">How the score works</summary>
+            <p className="mt-2">Out of 100: 30 for reachability (email, phone, website), 30 for review opportunity, 30 for website opportunity, and 10 for how established the business is. Higher means an easier, more valuable pitch. Qualified means 45 or more with a phone number or email. Open Details on any lead for its breakdown.</p>
+          </details>
         </section>
       )}
     </div>
